@@ -87,3 +87,18 @@ def test_old_sources_do_not_use_ai_budget(conn, tmp_path):
     never = lambda *a: (_ for _ in ()).throw(AssertionError('old item sent to AI'))
     assert worker.edition(conn, tmp_path, never, now=datetime(2026, 11, 6, 0, tzinfo=timezone.utc)) == 'empty'
     assert conn.execute('SELECT count(*) FROM calls').fetchone()[0] == 0
+
+
+def test_published_article_retries_render_without_more_ai(conn, tmp_path, monkeypatch):
+    from kiipeak import render
+    original = render.build
+    outputs = iter([draft(), {'approved': True, 'reason': '证据支持', 'issues': []}])
+    monkeypatch.setattr(render, 'build', lambda *a, **k: (_ for _ in ()).throw(OSError('disk full')))
+    now = datetime(2026, 11, 6, 0, tzinfo=timezone.utc)
+    assert worker.edition(conn, tmp_path, lambda *a: next(outputs), now=now) == 'render-pending'
+    assert conn.execute('SELECT count(*) FROM articles').fetchone()[0] == 1
+    monkeypatch.setattr(render, 'build', original)
+    never = lambda *a: (_ for _ in ()).throw(AssertionError('must not regenerate'))
+    assert worker.edition(conn, tmp_path, never, now=now) == 'rendered'
+    assert conn.execute('SELECT count(*) FROM calls').fetchone()[0] == 2
+    assert (tmp_path / 'current/index.html').is_file()

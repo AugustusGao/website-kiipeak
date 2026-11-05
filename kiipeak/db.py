@@ -74,6 +74,13 @@ def log(c, kind, status, message):
     c.commit()
 
 
+def content_changed(c):
+    """Call inside the same transaction as a public-content mutation."""
+    c.execute("""INSERT INTO settings VALUES ('content_revision','1')
+        ON CONFLICT(key) DO UPDATE SET value=CAST(CAST(value AS INTEGER)+1 AS TEXT)""")
+    c.execute("INSERT OR REPLACE INTO settings VALUES ('render_pending','true')")
+
+
 def add_candidate(c, source, url, title, text, published_at):
     fp = hashlib.sha256((title.strip().casefold() + '\n' + text[:6000]).encode()).hexdigest()
     cur = c.execute('''INSERT OR IGNORE INTO candidates
@@ -90,4 +97,5 @@ def withdraw(c, article_id):
     c.execute('INSERT INTO revisions(article_id,payload,reason,created_at) VALUES (?,?,?,?)',
               (article_id, row['payload'], '撤回', stamp()))
     c.execute("UPDATE articles SET status='withdrawn' WHERE id=?", (article_id,))
+    content_changed(c)
     c.commit()

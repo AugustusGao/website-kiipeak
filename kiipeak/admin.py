@@ -99,6 +99,7 @@ def serve(db_path, site_root, source_path, data_dir):
                                   (row['id'], row['payload'], reason, db.stamp()))
                         c.execute('UPDATE articles SET title=?,category=?,payload=? WHERE id=?',
                                   (revised['title'], revised['category'], json.dumps(revised, ensure_ascii=False), row['id']))
+                        db.content_changed(c)
                         c.commit()
                         render.build(c, site_root)
                     elif action == 'sources':

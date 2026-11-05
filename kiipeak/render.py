@@ -28,14 +28,27 @@ def write_page(path, body):
 
 
 def build(c, output_root, base_url='https://kiipeak.com'):
+    from .worker import lock
+    root = Path(output_root)
+    root.mkdir(parents=True, exist_ok=True)
+    # All callers (including administration) serialize before selecting their snapshot.
+    with lock(root / 'render.lock', blocking=True):
+        return _build(c, root, base_url)
+
+
+def _build(c, output_root, base_url):
+    from . import db
     root = Path(output_root)
     releases = root / 'releases'
     releases.mkdir(parents=True, exist_ok=True)
     release = releases / (datetime.now().strftime('%Y%m%d%H%M%S') + '-' + uuid.uuid4().hex[:8])
     release.mkdir()
+    activated = False
     env = Environment(loader=FileSystemLoader(ROOT / 'templates'), autoescape=select_autoescape(['html', 'xml']))
     env.filters['safe_link'] = safe_link
     articles = []
+    c.execute('BEGIN')
+    snapshot_revision = db.setting(c, 'content_revision', 0)
     for row in c.execute("SELECT * FROM articles WHERE status='published' ORDER BY published_at DESC"):
         item = dict(row)
         item['data'] = json.loads(item['payload'])
@@ -44,6 +57,7 @@ def build(c, output_root, base_url='https://kiipeak.com'):
         item['date'] = item['local_day']
         item['reading'] = max(2, round(sum(len(s['text']) for s in item['data']['sections']) / 350))
         articles.append(item)
+    c.commit()
     common = dict(categories=CATEGORIES, base_url=base_url, articles=articles,
                   year=datetime.now().year, updated=articles[0]['date'] if articles else None)
     def page(name, path, **context):
@@ -110,10 +124,19 @@ def build(c, output_root, base_url='https://kiipeak.com'):
             temporary_link = root / ('next-' + uuid.uuid4().hex)
             temporary_link.symlink_to(release, target_is_directory=True)
             os.replace(temporary_link, current)
-        for old in sorted(releases.iterdir(), reverse=True)[4:]:
-            if old != release:
-                shutil.rmtree(old)
+        activated = True
+        c.execute("INSERT OR REPLACE INTO settings VALUES ('rendered_revision',?)", (str(snapshot_revision),))
+        c.execute("""UPDATE settings SET value='false' WHERE key='render_pending'
+            AND COALESCE((SELECT CAST(value AS INTEGER) FROM settings WHERE key='content_revision'),0)=?""", (snapshot_revision,))
+        c.commit()
+        try:
+            for old in sorted(releases.iterdir(), reverse=True)[4:]:
+                if old != release:
+                    shutil.rmtree(old)
+        except OSError:
+            db.log(c, 'render', 'warning', '旧版本清理未完成，当前在线版本已保留')
         return release
     except Exception:
-        shutil.rmtree(release, ignore_errors=True)
+        if not activated:
+            shutil.rmtree(release, ignore_errors=True)
         raise

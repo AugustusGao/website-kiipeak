@@ -75,6 +75,7 @@ def publish(c, article, evidence, now, batch):
              json.dumps(selected, ensure_ascii=False), now.isoformat(), day, batch, key))
         for item in selected:
             c.execute("UPDATE candidates SET status='published' WHERE id=?", (item['id'],))
+        db.content_changed(c)
         c.commit()
         return True
     except Exception:

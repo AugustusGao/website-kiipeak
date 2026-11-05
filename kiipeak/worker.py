@@ -22,7 +22,7 @@ class GenerationError(Exception):
 
 
 @contextmanager
-def lock(path):
+def lock(path, blocking=False):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'a+b') as handle:
         if os.name == 'nt':
@@ -30,10 +30,10 @@ def lock(path):
             handle.write(b'0')
             handle.flush()
             handle.seek(0)
-            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK, 1)
         else:
             import fcntl
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(handle, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
         try:
             yield
         finally:
@@ -102,6 +102,15 @@ def _batch_status(c, batch, status):
 def edition(c, site_root, generate=codex_generate, now=None):
     now = now or datetime.now(timezone.utc)
     day = now.astimezone(BEIJING).date().isoformat()
+    # Reconcile a committed publication even when paused, cooling down or already done.
+    if db.setting(c, 'render_pending', False):
+        try:
+            render.build(c, site_root)
+            db.log(c, 'render', 'ok', '已恢复待发布页面，无需再次调用 AI')
+            return 'rendered'
+        except Exception:
+            db.log(c, 'render', 'error', '页面构建仍未完成，已保留旧站，等待重试')
+            return 'render-pending'
     if db.setting(c, 'paused', False):
         db.log(c, 'edition', 'paused', '自动编辑已暂停')
         return 'paused'
@@ -180,7 +189,11 @@ category仅允许humanoid、everyday、industry、learning。event_date是事件
             db.log(c, 'edition', 'skipped', '事件重复或已达发布上限')
             return 'skipped'
         _batch_status(c, batch, 'published')
-        render.build(c, site_root)
+        try:
+            render.build(c, site_root)
+        except Exception:
+            db.log(c, 'render', 'error', '文章已保存但页面构建未完成；旧站保留，可重试恢复')
+            return 'render-pending'
         db.log(c, 'edition', 'published', article['title'])
         db.set_setting(c, 'cooldown_until', None)
         return 'published'
