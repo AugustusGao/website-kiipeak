@@ -121,7 +121,7 @@ def edition(c, site_root, generate=codex_generate, now=None):
     row = c.execute('SELECT status FROM batches WHERE name=?', (batch,)).fetchone()
     if row and row['status'] in ('published', 'skipped'):
         return 'already-done'
-    if c.execute('SELECT count(*) FROM calls WHERE local_day=?', (day,)).fetchone()[0] > 2:
+    if c.execute("SELECT count(*) FROM calls WHERE local_day=? AND stage NOT LIKE 'acceptance:%'", (day,)).fetchone()[0] > 2:
         db.log(c, 'edition', 'budget', '本日调用上限已不足以完成两阶段核验，等待下一天')
         return 'budget'
     if c.execute('SELECT count(*) FROM articles WHERE local_day=?', (day,)).fetchone()[0] >= 2:

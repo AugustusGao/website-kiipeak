@@ -1,5 +1,7 @@
 """Local deploy helper. Credentials are read from the untracked AGENTS.md."""
 import pathlib, re, sys, warnings
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 warnings.filterwarnings("ignore")
 import paramiko
 ROOT=pathlib.Path(__file__).resolve().parents[1]

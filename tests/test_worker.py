@@ -62,6 +62,14 @@ def test_calls_budget_and_pausing(conn, tmp_path):
     assert worker.edition(conn, tmp_path, fail) == 'paused'
 
 
+def test_initial_acceptance_calls_do_not_spend_scheduled_budget(conn, tmp_path):
+    for _ in range(3):
+        conn.execute("INSERT INTO calls(local_day,stage,status,created_at) VALUES ('2026-11-06','acceptance:draft','ok','x')")
+    conn.commit()
+    assert worker.edition(conn, tmp_path, lambda *a: {'decision': 'skip', 'reason': '无合适选题', 'article': None},
+                          now=datetime(2026, 11, 6, 0, tzinfo=timezone.utc)) == 'skipped'
+
+
 def test_invalid_review_type_does_not_pass(conn, tmp_path):
     outputs = iter([draft(), {'approved': 'yes', 'reason': 'x', 'issues': []}])
     assert worker.edition(conn, tmp_path, lambda *a: next(outputs),

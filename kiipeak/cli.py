@@ -16,6 +16,9 @@ def main():
     args = parser.parse_args()
     data = Path(args.data)
     data.mkdir(parents=True, exist_ok=True)
+    requests = ('schedule', 'collect', 'edition', 'retry')
+    if args.command == 'dispatch' and not any((data / 'requests' / (name + '.request')).exists() for name in requests):
+        return
     source_path = Path(__file__).resolve().parents[1] / 'config/sources.json'
     c = db.connect(data / 'news.db')
     try:
@@ -39,7 +42,7 @@ def main():
                                   'candidates': c.execute('SELECT count(*) FROM candidates').fetchone()[0],
                                   'paused': db.setting(c, 'paused', False)}, ensure_ascii=False))
             elif args.command == 'dispatch':
-                for name in ('schedule', 'collect', 'edition', 'retry'):
+                for name in requests:
                     request = data / 'requests' / (name + '.request')
                     if not request.exists():
                         continue
