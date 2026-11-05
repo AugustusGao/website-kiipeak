@@ -1,0 +1,10 @@
+AGENTS.md
+.env*
+*.pem
+*.key
+__pycache__/
+.pytest_cache/
+.venv/
+var/
+.superpowers/
+artifacts/
