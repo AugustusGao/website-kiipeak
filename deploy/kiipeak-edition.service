@@ -1,0 +1,18 @@
+[Unit]
+Description=KiiPeak edition
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=root
+Group=kiipeak
+WorkingDirectory=/opt/kiipeak
+Environment=PYTHONUNBUFFERED=1
+Environment=KIIPEAK_DATA=/var/lib/kiipeak/data
+ExecStart=/opt/kiipeak/.venv/bin/python -m kiipeak.cli edition
+UMask=0007
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/kiipeak /var/www/kiipeak /var/lib/kiipeak-ai
+TimeoutStartSec=26min

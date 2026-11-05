@@ -1,0 +1,8 @@
+[Unit]
+Description=KiiPeak source collection every two hours
+[Timer]
+OnCalendar=*-*-* 00/2:15:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=0
+[Install]
+WantedBy=timers.target

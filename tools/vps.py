@@ -1,6 +1,6 @@
 """Local deploy helper. Credentials are read from the untracked AGENTS.md."""
 import pathlib, re, sys, warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore")
 import paramiko
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 def connect():

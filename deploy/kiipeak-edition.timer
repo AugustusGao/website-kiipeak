@@ -1,0 +1,11 @@
+[Unit]
+Description=KiiPeak editorial editions (Beijing time)
+[Timer]
+OnCalendar=*-*-* 05:00:00 Asia/Shanghai
+OnCalendar=*-*-* 20:00:00 Asia/Shanghai
+RandomizedDelaySec=0
+AccuracySec=1s
+Persistent=true
+Unit=kiipeak-edition.service
+[Install]
+WantedBy=timers.target

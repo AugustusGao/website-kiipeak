@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ title }} · KiiPeak</title>
+  <meta name="description" content="{{ article.data.summary if article is defined else '从研究实验室到真实世界，用中文读懂全球具身智能与机器人前沿。精选进展，解释意义，保留局限。' }}">
+  <link rel="stylesheet" href="/assets/style.css">
+  <link rel="icon" type="image/svg+xml" href="/assets/mark.svg">
+  <link rel="alternate" type="application/rss+xml" title="KiiPeak 精选" href="/feed.xml">
+  {% if article is defined %}<link rel="canonical" href="{{ base_url }}{{ article.url }}"><meta property="og:title" content="{{ article.title }}"><meta property="og:description" content="{{ article.data.summary }}">{% endif %}
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+<header class="header wrap">
+  <a class="brand" href="/" aria-label="KiiPeak 首页"><img src="/assets/mark.svg" width="32" height="32" alt=""><span>KiiPeak<span class="brand-dot">.</span></span></a>
+  <nav aria-label="主导航"><a href="/" {% if selected is defined and not selected %}aria-current="page"{% endif %}>精选</a><a href="/category/humanoid/">人形机器人</a><a href="/category/learning/">机器人学习</a><a href="/about/">关于</a></nav>
+  <a class="search-link" href="/search/" aria-label="搜索文章"><span aria-hidden="true">⌕</span><span>搜索</span></a>
+</header>
+<main id="main" class="wrap">{% block content %}{% endblock %}</main>
+<footer class="footer wrap"><div><a class="brand small" href="/">KiiPeak.</a><p>从实验室到真实世界，保持好奇，也保持判断。</p></div><div class="footer-links"><a href="/about/">编辑准则</a><a href="/feed.xml">RSS 订阅 ↗</a><span>© {{ year }} KiiPeak</span></div></footer>
+</body></html>

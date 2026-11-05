@@ -31,6 +31,14 @@ def test_tracking_urls_and_fragments_are_deduplicated(conn):
     assert not db.add_candidate(conn, 'source', a, 'robot', 'body', '2026-11-05')
 
 
+def test_source_dates_are_normalized_before_sorting(conn):
+    db.add_candidate(conn, 'Official', 'https://example.org/old', 'Old robot', 'one', 'Wed, 22 Jul 2026 13:00:11 +0000')
+    db.add_candidate(conn, 'Official', 'https://example.org/new', 'New robot', 'two', '2026-11-05T15:00:00Z')
+    rows = conn.execute('SELECT title,published_at FROM candidates ORDER BY published_at DESC').fetchall()
+    assert rows[0]['title'] == 'New robot'
+    assert rows[1]['published_at'] == '2026-07-22'
+
+
 @pytest.mark.parametrize('url', ['file:///etc/passwd', 'http://127.0.0.1/a',
     'https://169.254.169.254/', 'https://10.0.0.1', 'https://user:pass@example.org', 'http://[::1]/'])
 def test_private_or_credential_urls_rejected(url):
@@ -76,3 +84,25 @@ def test_withdraw_preserves_history(conn):
     db.withdraw(conn, row['id'])
     assert conn.execute('SELECT status FROM articles').fetchone()[0] == 'withdrawn'
     assert conn.execute('SELECT count(*) FROM revisions').fetchone()[0] >= 1
+
+
+def test_fetch_pins_validated_address_and_checks_each_redirect(monkeypatch):
+    import io
+    import urllib3
+    resolutions, pools = [], []
+    def resolve(host, *args, **kwargs):
+        resolutions.append(host)
+        return [(2, 1, 6, '', ('8.8.8.8', 443))]
+    class Pool:
+        def __init__(self, host, **kwargs):
+            pools.append((host, kwargs))
+        def request(self, *args, **kwargs):
+            return urllib3.response.HTTPResponse(body=io.BytesIO(b'ok'), status=200, headers={}, preload_content=False)
+        def close(self):
+            pass
+    monkeypatch.setattr(sources.socket, 'getaddrinfo', resolve)
+    monkeypatch.setattr(sources.urllib3, 'HTTPSConnectionPool', Pool)
+    assert sources.fetch('https://example.org/test')[0] == 'ok'
+    assert resolutions == ['example.org']
+    assert pools[0][0] == '8.8.8.8'
+    assert pools[0][1]['assert_hostname'] == 'example.org'

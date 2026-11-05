@@ -1,12 +1,25 @@
 import hashlib
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 
 def stamp():
     return datetime.now(timezone.utc).isoformat()
+
+
+def normalize_date(value):
+    if not value:
+        return ''
+    try:
+        return date.fromisoformat(value[:10]).isoformat()
+    except (ValueError, TypeError):
+        try:
+            return parsedate_to_datetime(value).date().isoformat()
+        except (ValueError, TypeError, OverflowError):
+            return ''
 
 
 def connect(path):
@@ -38,6 +51,9 @@ def connect(path):
       id INTEGER PRIMARY KEY, local_day TEXT NOT NULL, stage TEXT NOT NULL,
       status TEXT NOT NULL, created_at TEXT NOT NULL);
     ''')
+    # Upgrade initial ingestion rows without changing their provenance or contents.
+    for row in c.execute("SELECT id,published_at FROM candidates WHERE length(published_at)>10").fetchall():
+        c.execute('UPDATE candidates SET published_at=? WHERE id=?', (normalize_date(row['published_at']), row['id']))
     c.commit()
     return c
 
@@ -62,7 +78,7 @@ def add_candidate(c, source, url, title, text, published_at):
     fp = hashlib.sha256((title.strip().casefold() + '\n' + text[:6000]).encode()).hexdigest()
     cur = c.execute('''INSERT OR IGNORE INTO candidates
       (source,url,title,text,published_at,collected_at,fingerprint) VALUES (?,?,?,?,?,?,?)''',
-      (source, url, title[:500], text[:18000], published_at, stamp(), fp))
+      (source, url, title[:500], text[:18000], normalize_date(published_at), stamp(), fp))
     c.commit()
     return cur.rowcount > 0
 

@@ -1,0 +1,7 @@
+[Unit]
+Description=KiiPeak management request queue
+[Path]
+DirectoryNotEmpty=/var/lib/kiipeak/data/requests
+Unit=kiipeak-dispatch.service
+[Install]
+WantedBy=multi-user.target

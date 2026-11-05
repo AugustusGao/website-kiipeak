@@ -1,0 +1,8 @@
+[Unit]
+Description=Retry queued management requests after a busy worker
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1min
+Unit=kiipeak-dispatch.service
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,14 @@
+[
+  {"name":"arXiv Robotics","kind":"feed","url":"https://rss.arxiv.org/rss/cs.RO","enabled":true},
+  {"name":"Google DeepMind","kind":"feed","url":"https://deepmind.google/blog/rss.xml","enabled":true},
+  {"name":"NVIDIA Robotics","kind":"feed","url":"https://blogs.nvidia.com/blog/category/robotics/feed/","enabled":true},
+  {"name":"MIT News Robotics","kind":"feed","url":"https://news.mit.edu/topic/mitrobotics-rss.xml","enabled":true},
+  {"name":"Hugging Face","kind":"feed","url":"https://huggingface.co/blog/feed.xml","enabled":true},
+  {"name":"Physical Intelligence","kind":"page","url":"https://www.physicalintelligence.company/blog","selector":"a[href]","enabled":true},
+  {"name":"Figure","kind":"page","url":"https://www.figure.ai/news","selector":"a[href]","enabled":true},
+  {"name":"Boston Dynamics","kind":"page","url":"https://bostondynamics.com/blog/","selector":"a[href]","enabled":true},
+  {"name":"CMU Robotics Institute","kind":"page","url":"https://www.ri.cmu.edu/news/","selector":"a[href]","enabled":true},
+  {"name":"Berkeley AI Research","kind":"feed","url":"https://bair.berkeley.edu/blog/feed.xml","enabled":true},
+  {"name":"Google Research","kind":"feed","url":"https://research.google/blog/rss/","enabled":true},
+  {"name":"Stanford HAI","kind":"page","url":"https://hai.stanford.edu/news","selector":"a[href]","enabled":true}
+]
