@@ -31,3 +31,4 @@ Plan: docs/superpowers/plans/2026-11-05-kiipeak.md
 - Initial authentication attempt and two successful acceptance calls are labeled acceptance separately from scheduled-call count; regular budget usage is zero. No paid API was configured.
 - Final Windows and VPS Linux verification: 41 passed each. Both domain paths and public article 200; admin bound to 127.0.0.1; schedule 05:00 and 20:00 Asia/Shanghai enabled.
 - The application remains in the original workspace on feat/kiipeak; no Git remote/base branch to merge into. VPS deployment is the requested integration.
+- Task 5 complete: systemd unit verification and Certbot simulated renewal succeeded for both domain names. Production certificate was unchanged by the renewal test.
