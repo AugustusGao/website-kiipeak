@@ -1,4 +1,5 @@
 import json
+import hashlib
 import os
 import shutil
 import uuid
@@ -66,6 +67,7 @@ def _build(c, output_root, base_url):
             words = sum(len(section['text'].split()) for section in translated['sections'])
             by_language['en'].append(item | {'data': translated, 'title': translated['title'],
                 'url': '/en' + item['url'], 'reading': max(2, round(words / 220))})
+    assets_version = hashlib.sha256(b''.join(p.read_bytes() for p in sorted((ROOT / 'static').glob('*')) if p.is_file())).hexdigest()[:12]
     paths = []
     try:
         shutil.copytree(ROOT / 'static', release / 'assets')
@@ -74,7 +76,7 @@ def _build(c, output_root, base_url):
             t = i18n.translator(lang)
             categories = i18n.EN_CATEGORIES if lang == 'en' else CATEGORIES
             common = dict(categories=categories, base_url=base_url, articles=localized, lang=lang,
-                          prefix=prefix, t=t, year=datetime.now().year,
+                          prefix=prefix, t=t, assets_version=assets_version, year=datetime.now().year,
                           updated=localized[0]['date'] if localized else None)
             def page(name, path, counterpart=True, **context):
                 logical = '/' if path == 'index.html' else '/' + path.removesuffix('index.html')

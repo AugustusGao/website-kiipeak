@@ -58,6 +58,7 @@ def test_localized_routes_switch_search_and_feed(conn, tmp_path):
     assert english()['limitations'] in en_article
     assert 'href="/articles/' in en_article
     assert 'https://example.org/research' in en_article
+    assert '<strong>Correction</strong>' not in en_article
     assert 'https://kiipeak.com/en/articles/' in (site / 'sitemap.xml').read_text(encoding='utf-8')
     assert (site / 'en/about/index.html').is_file()
     assert (site / 'en/category/learning/index.html').is_file()
@@ -104,6 +105,10 @@ def test_backfill_is_reviewed_atomic_and_preserves_article_identity(conn, tmp_pa
     stages = []
     def generate(stage, prompt):
         stages.append(stage)
+        if stage == 'review':
+            rendered = json.loads(prompt.split('\nEnglish articles as rendered:\n')[1])
+            assert rendered[0]['article']['event_date'] == article()['event_date']
+            assert rendered[0]['article']['title'] == english()['title']
         return {'translations': [{'article_id': 1, 'english': english()}]} if stage == 'translation' else {'approved': True, 'issues': [], 'reason': 'faithful'}
     assert worker.backfill_english(conn, tmp_path, generate) == 1
     after = dict(conn.execute('SELECT * FROM articles').fetchone())
@@ -121,3 +126,33 @@ def test_rejected_backfill_leaves_chinese_payload_untouched(conn, tmp_path):
     with pytest.raises(ValueError):
         worker.backfill_english(conn, tmp_path, lambda *a: next(outputs))
     assert conn.execute('SELECT payload FROM articles').fetchone()[0] == before
+
+
+def test_correction_removes_stale_english_pages_and_alternate_links(conn, tmp_path):
+    editor.publish(conn, editor.with_english(article(), english()), evidence(), datetime(2026, 11, 6, 0, tzinfo=timezone.utc), 'one')
+    payload = json.loads(conn.execute('SELECT payload FROM articles').fetchone()[0])
+    payload['summary'] += '这是更正后的摘要。'
+    conn.execute('UPDATE articles SET payload=?', (json.dumps(payload, ensure_ascii=False),))
+    db.content_changed(conn)
+    conn.commit()
+    render.build(conn, tmp_path)
+    assert json.loads((tmp_path / 'current/en/search.json').read_text(encoding='utf-8')) == []
+    assert not list((tmp_path / 'current/en/articles').glob('*/index.html'))
+    chinese = next((tmp_path / 'current/articles').glob('*/index.html')).read_text(encoding='utf-8')
+    assert 'hreflang="en"' not in chinese
+
+
+def test_backfill_does_not_overwrite_concurrent_correction(conn, tmp_path):
+    editor.publish(conn, article(), evidence(), datetime(2026, 11, 6, 0, tzinfo=timezone.utc), 'one')
+    def generate(stage, prompt):
+        if stage == 'translation':
+            return {'translations': [{'article_id': 1, 'english': english()}]}
+        corrected = article() | {'summary': '管理员已经更正了这篇文章的摘要。'}
+        conn.execute('UPDATE articles SET payload=?', (json.dumps(corrected, ensure_ascii=False),))
+        conn.commit()
+        return {'approved': True, 'reason': 'faithful', 'issues': []}
+    with pytest.raises(ValueError, match='原文已修改'):
+        worker.backfill_english(conn, tmp_path, generate)
+    current = json.loads(conn.execute('SELECT payload FROM articles').fetchone()[0])
+    assert current['summary'] == '管理员已经更正了这篇文章的摘要。'
+    assert 'translations' not in current

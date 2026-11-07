@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{{ title }} · KiiPeak</title>
   <meta name="description" content="{{ article.data.summary if article is defined else t('从研究实验室到真实世界，用中文读懂全球具身智能与机器人前沿。精选进展，解释意义，保留局限。') }}">
-  <link rel="stylesheet" href="/assets/style.css">
+  <link rel="stylesheet" href="/assets/style.css?v={{ assets_version }}">
   <link rel="icon" type="image/svg+xml" href="/assets/mark.svg">
   <link rel="canonical" href="{{ base_url }}{{ page_path }}">
   {% for locale,path in alternates.items() %}<link rel="alternate" hreflang="{{ locale }}" href="{{ base_url }}{{ path }}">{% endfor %}
