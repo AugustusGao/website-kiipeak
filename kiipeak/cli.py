@@ -10,7 +10,7 @@ from . import admin, db, render, sources, worker
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', choices=['init', 'collect', 'edition', 'render', 'backup', 'admin', 'dispatch', 'status'])
+    parser.add_argument('command', choices=['init', 'collect', 'edition', 'render', 'backup', 'admin', 'dispatch', 'status', 'backfill-english'])
     parser.add_argument('--data', default=os.environ.get('KIIPEAK_DATA', '/var/lib/kiipeak/data'))
     parser.add_argument('--site', default=os.environ.get('KIIPEAK_SITE', '/var/www/kiipeak'))
     args = parser.parse_args()
@@ -37,6 +37,14 @@ def main():
                 print(render.build(c, args.site))
             elif args.command == 'backup':
                 print(worker.backup(c, data.parent / 'backups'))
+            elif args.command == 'backfill-english':
+                count = worker.backfill_english(c, args.site)
+                from .editor import english_for
+                remaining = sum(english_for(json.loads(row['payload'])) is None for row in c.execute("SELECT payload FROM articles WHERE status='published'"))
+                if remaining == 0:
+                    db.set_setting(c, 'english_enabled', True)
+                    db.log(c, 'translation', 'enabled', '完整双语发布已启用')
+                print(json.dumps({'translated': count, 'remaining': remaining, 'bilingual_enabled': remaining == 0}))
             elif args.command == 'status':
                 print(json.dumps({'articles': c.execute("SELECT count(*) FROM articles WHERE status='published'").fetchone()[0],
                                   'candidates': c.execute('SELECT count(*) FROM candidates').fetchone()[0],

@@ -93,6 +93,66 @@
               "items": {
                 "type": "integer"
               }
+            },
+            "translations": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "en": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "heading": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "source_ids": {
+                            "type": "array",
+                            "items": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        "required": [
+                          "heading",
+                          "text",
+                          "source_ids"
+                        ]
+                      }
+                    },
+                    "limitations": {
+                      "type": "string"
+                    },
+                    "correction": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "summary",
+                    "sections",
+                    "limitations",
+                    "correction"
+                  ]
+                }
+              },
+              "required": [
+                "en"
+              ]
             }
           },
           "required": [
@@ -103,7 +163,8 @@
             "sections",
             "limitations",
             "facts",
-            "source_ids"
+            "source_ids",
+            "translations"
           ]
         },
         {

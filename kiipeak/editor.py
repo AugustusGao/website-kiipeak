@@ -1,4 +1,5 @@
 import hashlib
+import copy
 import json
 import re
 from datetime import date
@@ -7,6 +8,58 @@ from zoneinfo import ZoneInfo
 from . import db
 
 CATEGORIES = {'humanoid': '人形机器人', 'everyday': '走进生活', 'industry': '产业现场', 'learning': '机器人学习'}
+
+
+def source_digest(article):
+    original = {k: v for k, v in article.items() if k not in ('translations', 'translation_sources')}
+    return hashlib.sha256(json.dumps(original, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def validate_english(article, english):
+    if not isinstance(english, dict) or set(english) - {'title', 'summary', 'sections', 'limitations', 'correction'}:
+        raise ValueError('英文版本字段不合法')
+    def text(value, minimum=3, maximum=12000):
+        result = plain(value, minimum, maximum)
+        if len(re.findall(r'[A-Za-z]', result)) < 3:
+            raise ValueError('英文内容缺少英文文字')
+        return result
+    text(english.get('title'), 6, 180)
+    text(english.get('summary'), 10, 1000)
+    text(english.get('limitations'), 5, 5000)
+    sections = english.get('sections')
+    if not isinstance(sections, list) or len(sections) != len(article['sections']):
+        raise ValueError('中英文段落不对应')
+    for original, translated in zip(article['sections'], sections):
+        if not isinstance(translated, dict) or set(translated) != {'heading', 'text', 'source_ids'}:
+            raise ValueError('英文段落字段不合法')
+        text(translated.get('heading'), 3, 160)
+        text(translated.get('text'))
+        if translated.get('source_ids') != original['source_ids'] or any(type(i) is not int for i in translated['source_ids']):
+            raise ValueError('中英文证据关联不一致')
+    if article.get('correction'):
+        text(english.get('correction'), 5, 1500)
+    elif english.get('correction'):
+        raise ValueError('英文更正说明没有中文依据')
+    return english
+
+
+def with_english(article, english):
+    validate_english(article, english)
+    result = copy.deepcopy(article)
+    result.setdefault('translations', {})['en'] = copy.deepcopy(english)
+    result.setdefault('translation_sources', {})['en'] = source_digest(article)
+    return result
+
+
+def english_for(article):
+    try:
+        if article.get('translation_sources', {}).get('en') != source_digest(article):
+            return None
+        english = article['translations']['en']
+        validate_english(article, english)
+        return {k: v for k, v in article.items() if k not in ('translations', 'translation_sources')} | english
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return None
 
 
 def plain(value, minimum=1, maximum=18000):
@@ -58,6 +111,8 @@ def event_key(evidence):
 def publish(c, article, evidence, now, batch):
     day = now.astimezone(ZoneInfo('Asia/Shanghai')).date().isoformat()
     validate(article, evidence, day)
+    if article.get('translations', {}).get('en') is not None:
+        article = with_english(article, article['translations']['en'])
     selected = [e for e in evidence if e['id'] in article['source_ids']]
     key = event_key(selected)
     try:

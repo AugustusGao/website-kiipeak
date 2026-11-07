@@ -23,7 +23,9 @@ def main():
     archive.seek(0)
     sftp.putfo(archive, '/opt/kiipeak-release.tar.gz')
     sftp.close()
-    script = 'tar -xzf /opt/kiipeak-release.tar.gz -C /opt/kiipeak\n' + (ROOT / 'deploy/activate.sh').read_text(encoding='utf-8')
+    script = 'tar -xzf /opt/kiipeak-release.tar.gz -C /opt/kiipeak\n'
+    if '--source-only' not in sys.argv:
+        script += (ROOT / 'deploy/activate.sh').read_text(encoding='utf-8')
     _, out, err = c.exec_command(script, timeout=180)
     print(out.read().decode('utf-8', errors='replace'))
     print(err.read().decode('utf-8', errors='replace'), file=sys.stderr)
