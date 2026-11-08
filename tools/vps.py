@@ -2,6 +2,7 @@
 import pathlib, re, sys, warnings
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+sys.stdin.reconfigure(encoding='utf-8')
 warnings.filterwarnings("ignore")
 import paramiko
 ROOT=pathlib.Path(__file__).resolve().parents[1]

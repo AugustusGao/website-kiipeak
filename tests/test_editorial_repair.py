@@ -126,3 +126,108 @@ def test_existing_held_morning_draft_is_repaired_without_reselecting(conn, tmp_p
         return proposal('修订后更符合证据的机器人进展') if stage == 'revise' else PASS
     assert worker.edition(conn, tmp_path, generate, now=MORNING) == 'published'
     assert stages == ['revise', 'review']
+
+
+def test_invalid_selected_topic_does_not_discard_other_candidates(conn, tmp_path):
+    db.add_candidate(conn, 'Other', 'https://example.org/other', 'Other robot result', evidence()[0]['text'] + ' Extra.', '2026-11-05')
+    stages = []
+    def generate(stage, prompt):
+        stages.append(stage)
+        if stage == 'review': return PASS
+        if stages.count('draft') >= 2: return proposal('其他机器人研究的新进展', 2)
+        return proposal('短', 1)
+    assert worker.edition(conn, tmp_path, generate, now=MORNING) == 'published'
+    assert stages == ['draft', 'revise', 'draft', 'review']
+
+
+def test_rejection_state_survives_crash_before_logging(conn, tmp_path, monkeypatch):
+    original = db.log
+    def crashing_log(c, kind, status, message):
+        if status == 'revision-required': raise RuntimeError('process stopped')
+        return original(c, kind, status, message)
+    monkeypatch.setattr(db, 'log', crashing_log)
+    with pytest.raises(RuntimeError):
+        worker.edition(conn, tmp_path, lambda stage,p: FAIL if stage == 'review' else proposal(), now=MORNING)
+    monkeypatch.setattr(db, 'log', original)
+    stages = []
+    def resumed(stage, prompt):
+        stages.append(stage)
+        if stage == 'revise':
+            assert FAIL['issues'][0] in prompt
+            return proposal('修订后的机器人研究解读')
+        assert stage == 'review' and len(stages) > 1
+        return PASS
+    assert worker.edition(conn, tmp_path, resumed, now=MORNING) == 'published'
+    assert stages == ['revise', 'review']
+
+
+def test_no_topic_waits_for_fresh_evidence_in_same_slot(conn, tmp_path):
+    for i in range(10):
+        db.add_candidate(conn, 'Official', f'https://example.org/old-{i}', f'Robot item {i}', evidence()[0]['text'] + str(i), '2026-11-05')
+    assert worker.edition(conn, tmp_path, lambda *a: {'decision': 'skip', 'article': None, 'reason': '没有合适新闻'}, now=MORNING) == 'skipped'
+    db.add_candidate(conn, 'Official', 'https://example.org/fresh', 'A genuinely fresh robot result', evidence()[0]['text'] + ' Fresh.', '2026-11-08')
+    assert worker.retry_due(conn, now=datetime(2026,11,8,1,tzinfo=timezone.utc))
+
+
+def test_committed_publication_is_authoritative_after_state_write_crash(conn, tmp_path, monkeypatch):
+    original = db.set_setting
+    def crashing_save(c, key, value):
+        if key.startswith('editorial:') and c.execute('SELECT count(*) FROM articles').fetchone()[0]:
+            raise RuntimeError('stopped after article commit')
+        return original(c, key, value)
+    monkeypatch.setattr(db, 'set_setting', crashing_save)
+    with pytest.raises(RuntimeError):
+        worker.edition(conn, tmp_path, lambda stage,p: proposal() if stage == 'draft' else PASS, now=MORNING)
+    monkeypatch.setattr(db, 'set_setting', original)
+    never = lambda *a: pytest.fail('already committed; must not call AI again')
+    assert worker.edition(conn, tmp_path, never, now=MORNING) == 'rendered'
+    assert worker.edition(conn, tmp_path, never, now=MORNING) == 'already-done'
+
+
+def test_generation_schema_requires_calendar_date_not_timestamp():
+    import re
+    from pathlib import Path
+    for stage in ('draft', 'revise'):
+        schema = json.loads(Path(f'config/{stage}.schema.json').read_text(encoding='utf-8'))
+        pattern = schema['properties']['article']['anyOf'][0]['properties']['event_date']['pattern']
+        assert re.fullmatch(pattern, '2026-11-05')
+        assert not re.fullmatch(pattern, '2026-11-05T04:04:01+00:00')
+
+
+def test_timed_out_generation_terminates_its_entire_process_group(monkeypatch):
+    import signal
+    import subprocess
+    killed = []
+    class HangingProcess:
+        pid = 12345
+        returncode = -9
+        attempts = 0
+        def communicate(self, *args, **kwargs):
+            self.attempts += 1
+            if self.attempts == 1: raise subprocess.TimeoutExpired(['codex'], 720)
+            return '', ''
+    monkeypatch.setattr(worker.subprocess, 'Popen', lambda *a, **k: HangingProcess())
+    monkeypatch.setattr(worker.os, 'killpg', lambda pid,sig: killed.append((pid,sig)), raising=False)
+    with pytest.raises(worker.GenerationError) as exc:
+        worker.run_generation_process(['codex'], 'prompt', {})
+    assert exc.value.kind == 'network'
+    assert killed == [(12345, getattr(signal, 'SIGKILL', 9))]
+
+
+def test_unpublished_bilingual_revision_does_not_create_public_correction_notice(conn, tmp_path):
+    from test_english import english
+    db.set_setting(conn, 'english_enabled', True)
+    stages = []
+    def generate(stage, prompt):
+        stages.append(stage)
+        if stage == 'review':
+            if stages.count('review') == 1: return FAIL
+            assert 'Correction: narrowed the claim' not in prompt
+            return PASS
+        a = proposal()
+        a['article']['translations'] = {'en': english() | {'correction': 'Correction: narrowed the claim' if stage == 'revise' else ''}}
+        return a
+    assert worker.edition(conn, tmp_path, generate, now=MORNING) == 'published'
+    saved = json.loads(conn.execute('SELECT payload FROM articles').fetchone()[0])
+    assert saved['translations']['en']['correction'] == ''
+    assert stages == ['draft','review','revise','review']

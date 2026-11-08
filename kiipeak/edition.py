@@ -1,5 +1,6 @@
 """Durable, bounded editorial correction with independent verification."""
 import json
+import copy
 from datetime import datetime, timedelta, timezone
 
 from . import db, editor, render
@@ -13,7 +14,9 @@ RULES = '''你是面向普通科技爱好者的机器人精选编辑。只依据
 选择近期、重要、尚未发布的进展，用简体中文解释发生了什么、为何重要、还有哪些局限。优先14天内，超过30天且无新进展则不选。
 写约800至1500中文字，3至5章；关键事实带逐字可找到的原文quote和source_id，每章带source_ids。保留作者归属、实验条件与未知项，不得虚构信息。
 特别注意：多项改进一起带来效果，不能推出其中一项是必要条件或唯一原因；不能把“采用后成功”写成“必须依赖”。摘要的单次诊断不能扩大成普遍规律。
-日期需包含有证据支持的年份，保留原文时区。category仅humanoid/everyday/industry/learning，event_date按证据。
+正文日期需包含有证据支持的年份，涉及提交时间时在正文保留原文时区。category仅humanoid/everyday/industry/learning。
+event_date字段必须严格为YYYY-MM-DD，仅日历日期，不含时间、T或时区；不要把完整时间戳放入这个字段。
+这里处理尚未发布的新稿，内部修订不是公开更正；英文correction必须为空字符串，不要添加更正告示。
 没有合适主题时返回decision=skip,article=null。不使用HTML或Markdown，严格输出指定JSON。'''
 
 
@@ -27,6 +30,17 @@ class EditingPaused(Exception):
 
 class WindowExpired(Exception):
     pass
+
+
+def prepare_article(raw, evidence, day, bilingual):
+    article = editor.validate(copy.deepcopy(raw), evidence, day)
+    english = article.get('translations', {}).get('en')
+    if isinstance(english, dict) and not article.get('correction'):
+        # No public article has changed yet; internal edits are not correction notices.
+        english['correction'] = ''
+    if bilingual or english is not None:
+        article = editor.with_english(article, english)
+    return article
 
 
 def attribute_legacy_calls(c, times):
@@ -58,6 +72,8 @@ def retry_due(c, now=None):
     times = db.setting(c, 'edition_times', ['05:00', '20:00'])
     batch = batch_name(now, times)
     if db.setting(c, 'paused', False) or not in_window(now, batch, times):
+        return False
+    if c.execute('SELECT 1 FROM articles WHERE batch=?', (batch,)).fetchone():
         return False
     row = c.execute('SELECT status FROM batches WHERE name=?', (batch,)).fetchone()
     if row and row['status'] == 'published':
@@ -95,6 +111,10 @@ def run(c, site_root, generate, now=None):
     if until and started < datetime.fromisoformat(until):
         return 'cooldown'
     previous = c.execute('SELECT * FROM batches WHERE name=?', (batch,)).fetchone()
+    if c.execute('SELECT 1 FROM articles WHERE batch=?', (batch,)).fetchone():
+        c.execute("INSERT OR REPLACE INTO batches VALUES (?,'published',?)", (batch, db.stamp()))
+        c.commit()
+        return 'already-done'
     if previous and previous['status'] == 'published':
         return 'already-done'
     if c.execute('SELECT count(*) FROM articles WHERE local_day=?', (day,)).fetchone()[0] >= 2:
@@ -102,7 +122,7 @@ def run(c, site_root, generate, now=None):
     attribute_legacy_calls(c, times)
     state = db.setting(c, 'editorial:' + batch, None)
     if state is None:
-        state = {'phase': 'draft', 'article': None, 'feedback': {}, 'excluded': [], 'topic': 0, 'revisions': 0, 'had_failure': False}
+        state = {'phase': 'draft', 'article': None, 'feedback': {}, 'excluded': [], 'topic': 0, 'topic_ids': [], 'revisions': 0, 'had_failure': False}
         latest_batch = c.execute('SELECT name FROM batches ORDER BY updated_at DESC LIMIT 1').fetchone()
         legacy = db.setting(c, 'latest_draft', None)
         if previous and previous['status'] == 'held' and latest_batch and latest_batch['name'] == batch and isinstance(legacy, dict):
@@ -110,7 +130,7 @@ def run(c, site_root, generate, now=None):
             held = [c.execute("SELECT error FROM candidates WHERE id=? AND status='held'", (sid,)).fetchone() for sid in ids]
             if ids and all(held):
                 reason = '; '.join(row['error'] for row in held)[:2000]
-                state.update(phase='revise', article=legacy, evidence_ids=ids,
+                state.update(phase='revise', article=legacy, evidence_ids=ids, topic_ids=ids,
                              feedback={'reason': reason, 'issues': [reason]}, had_failure=True)
     bilingual = db.setting(c, 'english_enabled', False)
     rules = RULES + ('''\n同时生成完整 English version 到article.translations.en：title,summary,sections,limitations,correction。
@@ -162,8 +182,9 @@ def run(c, site_root, generate, now=None):
         return result
 
     def next_topic():
-        state['excluded'] = sorted(set(state['excluded']) | set(state.get('evidence_ids', [])))
-        state.update(phase='draft', article=None, revisions=0, topic=state['topic'] + 1)
+        ids = state.get('topic_ids') or (state.get('article') or {}).get('source_ids') or state.get('evidence_ids', [])[:1]
+        state['excluded'] = sorted(set(state['excluded']) | set(ids))
+        state.update(phase='draft', article=None, topic_ids=[], revisions=0, topic=state['topic'] + 1)
         save()
         db.log(c, 'edition', 'switch-topic', '当前选题修订后仍未通过，尝试其他候选')
 
@@ -177,6 +198,15 @@ def run(c, site_root, generate, now=None):
                 save(status, 15)
                 db.log(c, 'edition', status, '当前没有可继续的候选，等待采集或下一批次')
                 return status
+            if phase == 'revise' and state.get('feedback', {}).get('reason') == '英文更正说明没有中文依据':
+                try:
+                    state['article'] = prepare_article(state['article'], evidence, day, bilingual)
+                    state.update(phase='review', evidence_ids=state['article']['source_ids'], topic_ids=state['article']['source_ids'])
+                    save()
+                    db.log(c, 'edition', 'metadata-repaired', '已清除未发布稿的内部修订告示，继续独立核验')
+                    continue
+                except (ValueError, TypeError, KeyError, AttributeError):
+                    pass
             if phase in ('draft', 'revise'):
                 prompt = rules + '\n今天（北京时间）=' + day + '\n已发布事件=' + json.dumps(recent, ensure_ascii=False)
                 if phase == 'revise':
@@ -187,26 +217,30 @@ def run(c, site_root, generate, now=None):
                 if phase == 'revise':
                     state['revisions'] += 1
                 if isinstance(response, dict) and response.get('decision') == 'skip' and response.get('article') is None:
-                    state['evidence_ids'] = [e['id'] for e in evidence]
-                    next_topic()
-                    continue
+                    state['excluded'] = sorted(set(state['excluded']) | {e['id'] for e in evidence})
+                    state.update(phase='draft', article=None, topic_ids=[], feedback={'reason': str(response.get('reason', '无合适选题')), 'issues': []})
+                    save('waiting', 15)
+                    db.log(c, 'edition', 'skipped', state['feedback']['reason'][:400])
+                    return 'skipped'
                 raw = response.get('article') if isinstance(response, dict) else None
                 try:
                     if not isinstance(response, dict) or response.get('decision') != 'publish':
                         raise ValueError('选题格式不合法')
-                    article = editor.validate(raw, evidence, day)
-                    if bilingual or article.get('translations', {}).get('en') is not None:
-                        article = editor.with_english(article, article.get('translations', {}).get('en'))
+                    article = prepare_article(raw, evidence, day, bilingual)
                 except (ValueError, TypeError, KeyError, AttributeError) as exc:
+                    offered = {e['id'] for e in evidence}
+                    selected = [sid for sid in raw.get('source_ids', []) if type(sid) is int and sid in offered] if isinstance(raw, dict) and isinstance(raw.get('source_ids'), list) else []
+                    topic_ids = selected or state.get('topic_ids') or [evidence[0]['id']]
                     state.update(article=raw if isinstance(raw, dict) else None,
-                                 evidence_ids=[e['id'] for e in evidence], feedback={'reason': str(exc), 'issues': [str(exc)]}, had_failure=True)
+                                 evidence_ids=[e['id'] for e in evidence], topic_ids=topic_ids,
+                                 feedback={'reason': str(exc), 'issues': [str(exc)]}, had_failure=True)
                     if state['revisions'] < 1:
                         state['phase'] = 'revise'
                         save()
                     else:
                         next_topic()
                     continue
-                state.update(article=article, evidence_ids=article['source_ids'], phase='review')
+                state.update(article=article, evidence_ids=article['source_ids'], topic_ids=article['source_ids'], phase='review')
                 for sid in article['source_ids']:
                     c.execute("UPDATE candidates SET status='draft',error='' WHERE id=?", (sid,))
                 c.commit()
@@ -228,13 +262,12 @@ If an English version is present, independently verify BOTH Chinese and English 
                 state.update(feedback={'reason': str(review.get('reason', '证据不足')), 'issues': review['issues']}, had_failure=True)
                 for sid in state['evidence_ids']:
                     c.execute("UPDATE candidates SET status='held',error=? WHERE id=?", (state['feedback']['reason'][:500], sid))
-                c.commit()
-                db.log(c, 'edition', 'revision-required', state['feedback']['reason'])
                 if state['revisions'] < 1:
                     state['phase'] = 'revise'
-                    save()
+                    save('revision-pending')
                 else:
                     next_topic()
+                db.log(c, 'edition', 'revision-required', state['feedback']['reason'])
                 continue
             if db.setting(c, 'paused', False):
                 raise EditingPaused()

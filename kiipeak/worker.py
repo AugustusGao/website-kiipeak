@@ -21,6 +21,22 @@ class GenerationError(Exception):
         self.kind = kind
 
 
+def run_generation_process(command, prompt, env):
+    import signal
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, text=True, env=env, start_new_session=True)
+    try:
+        stdout, stderr = process.communicate(prompt, timeout=720)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, getattr(signal, 'SIGKILL', 9))
+        except ProcessLookupError:
+            pass
+        process.communicate(timeout=5)
+        raise GenerationError('network', 'Codex 处理超时；执行进程已终止，保留草稿等待续跑') from None
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+
+
 @contextmanager
 def lock(path, blocking=False):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -75,10 +91,7 @@ def codex_generate(stage, prompt):
             command = ['runuser', '-u', 'kiipeak-ai', '--', 'env', 'HOME=' + str(home),
                        'CODEX_HOME=' + str(home / '.codex')] + command
         env = {k: v for k, v in os.environ.items() if k not in ('OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN')}
-        try:
-            result = subprocess.run(command, input=prompt, text=True, capture_output=True, timeout=720, env=env)
-        except subprocess.TimeoutExpired:
-            raise GenerationError('network', 'Codex 处理超时；本批次延后')
+        result = run_generation_process(command, prompt, env)
         combined = (result.stderr + result.stdout).lower()
         if result.returncode or not output.exists():
             if any(x in combined for x in ('usage limit', 'rate limit', 'quota', '429', 'limit reached')):
