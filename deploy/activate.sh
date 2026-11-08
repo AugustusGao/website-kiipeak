@@ -17,7 +17,7 @@ chmod 755 /etc/letsencrypt/renewal-hooks/deploy/kiipeak-nginx
 nginx -t
 systemctl daemon-reload
 systemctl reload nginx
-systemctl enable --now kiipeak-collect.timer kiipeak-edition.timer kiipeak-backup.timer kiipeak-dispatch.path kiipeak-dispatch.timer kiipeak-admin.service
+systemctl enable --now kiipeak-collect.timer kiipeak-edition.timer kiipeak-retry.timer kiipeak-backup.timer kiipeak-dispatch.path kiipeak-dispatch.timer kiipeak-admin.service
 systemctl restart kiipeak-admin.service
 systemctl start kiipeak-backup.service
 systemctl start --no-block kiipeak-collect.service

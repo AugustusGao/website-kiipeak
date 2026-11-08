@@ -10,7 +10,7 @@ from . import admin, db, render, sources, worker
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', choices=['init', 'collect', 'edition', 'render', 'backup', 'admin', 'dispatch', 'status', 'backfill-english'])
+    parser.add_argument('command', choices=['init', 'collect', 'edition', 'retry-edition', 'render', 'backup', 'admin', 'dispatch', 'status', 'backfill-english'])
     parser.add_argument('--data', default=os.environ.get('KIIPEAK_DATA', '/var/lib/kiipeak/data'))
     parser.add_argument('--site', default=os.environ.get('KIIPEAK_SITE', '/var/www/kiipeak'))
     args = parser.parse_args()
@@ -33,6 +33,9 @@ def main():
                 sources.collect(c, source_path)
             elif args.command == 'edition':
                 print(worker.edition(c, args.site))
+            elif args.command == 'retry-edition':
+                if worker.retry_due(c):
+                    print(worker.edition(c, args.site))
             elif args.command == 'render':
                 print(render.build(c, args.site))
             elif args.command == 'backup':

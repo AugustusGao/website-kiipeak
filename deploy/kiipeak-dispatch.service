@@ -15,4 +15,4 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 ReadWritePaths=/var/lib/kiipeak /var/www/kiipeak /var/lib/kiipeak-ai /etc/systemd/system
-TimeoutStartSec=26min
+TimeoutStartSec=105min

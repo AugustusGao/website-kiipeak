@@ -1,0 +1,181 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": [
+        "publish",
+        "skip"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "article": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "humanoid",
+                "everyday",
+                "industry",
+                "learning"
+              ]
+            },
+            "event_date": {
+              "type": "string"
+            },
+            "sections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "heading": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "source_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "required": [
+                  "heading",
+                  "text",
+                  "source_ids"
+                ]
+              }
+            },
+            "limitations": {
+              "type": "string"
+            },
+            "facts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "claim": {
+                    "type": "string"
+                  },
+                  "source_id": {
+                    "type": "integer"
+                  },
+                  "quote": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "claim",
+                  "source_id",
+                  "quote"
+                ]
+              }
+            },
+            "source_ids": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "translations": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "en": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "heading": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "source_ids": {
+                            "type": "array",
+                            "items": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        "required": [
+                          "heading",
+                          "text",
+                          "source_ids"
+                        ]
+                      }
+                    },
+                    "limitations": {
+                      "type": "string"
+                    },
+                    "correction": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "summary",
+                    "sections",
+                    "limitations",
+                    "correction"
+                  ]
+                }
+              },
+              "required": [
+                "en"
+              ]
+            }
+          },
+          "required": [
+            "title",
+            "summary",
+            "category",
+            "event_date",
+            "sections",
+            "limitations",
+            "facts",
+            "source_ids",
+            "translations"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "decision",
+    "reason",
+    "article"
+  ]
+}

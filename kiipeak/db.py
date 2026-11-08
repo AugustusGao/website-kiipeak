@@ -51,6 +51,8 @@ def connect(path):
       id INTEGER PRIMARY KEY, local_day TEXT NOT NULL, stage TEXT NOT NULL,
       status TEXT NOT NULL, created_at TEXT NOT NULL);
     ''')
+    if 'batch' not in {row['name'] for row in c.execute('PRAGMA table_info(calls)')}:
+        c.execute("ALTER TABLE calls ADD COLUMN batch TEXT NOT NULL DEFAULT ''")
     # Upgrade initial ingestion rows without changing their provenance or contents.
     for row in c.execute("SELECT id,published_at FROM candidates WHERE length(published_at)>10").fetchall():
         c.execute('UPDATE candidates SET published_at=? WHERE id=?', (normalize_date(row['published_at']), row['id']))

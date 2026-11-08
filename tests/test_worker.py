@@ -19,8 +19,7 @@ def draft():
 
 
 def test_review_rejection_never_publishes(conn, tmp_path):
-    outputs = iter([draft(), {'approved': False, 'reason': '证据不足', 'issues': ['事实不支持']}])
-    worker.edition(conn, tmp_path, lambda *args: next(outputs), now=datetime(2026, 11, 6, 0, tzinfo=timezone.utc))
+    worker.edition(conn, tmp_path, lambda stage,prompt: {'approved': False, 'reason': '证据不足', 'issues': ['事实不支持']} if stage == 'review' else draft(), now=datetime(2026, 11, 6, 0, tzinfo=timezone.utc))
     assert conn.execute('SELECT count(*) FROM articles').fetchone()[0] == 0
     assert conn.execute("SELECT status FROM candidates").fetchone()[0] == 'held'
 
@@ -53,7 +52,7 @@ def test_no_topic_uses_only_one_call(conn, tmp_path):
 
 
 def test_calls_budget_and_pausing(conn, tmp_path):
-    for _ in range(4):
+    for _ in range(16):
         conn.execute("INSERT INTO calls(local_day,stage,status,created_at) VALUES ('2026-11-06','draft','failed','x')")
     conn.commit()
     fail = lambda *a: (_ for _ in ()).throw(AssertionError('must not call'))

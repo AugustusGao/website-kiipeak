@@ -1,0 +1,10 @@
+[Unit]
+Description=Continue unfinished KiiPeak editions every 15 minutes
+[Timer]
+OnCalendar=*-*-* *:00/15:00 Asia/Shanghai
+AccuracySec=1s
+RandomizedDelaySec=0
+Persistent=false
+Unit=kiipeak-retry.service
+[Install]
+WantedBy=timers.target
