@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="/assets/style.css?v={{ assets_version }}">
   <link rel="icon" type="image/svg+xml" href="/assets/mark.svg">
   <link rel="canonical" href="{{ base_url }}{{ page_path }}">
+  <meta name="kiipeak-page" content="{{ page_path }}">
+  <script defer src="/assets/language.js?v={{ assets_version }}"></script>
   {% for locale,path in alternates.items() %}<link rel="alternate" hreflang="{{ locale }}" href="{{ base_url }}{{ path }}">{% endfor %}
   <link rel="alternate" type="application/rss+xml" title="{{ t('KiiPeak 精选') }}" href="{{ prefix }}/feed.xml">
   {% if article is defined %}<meta property="og:title" content="{{ article.title }}"><meta property="og:description" content="{{ article.data.summary }}">{% endif %}

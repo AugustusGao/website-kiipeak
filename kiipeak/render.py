@@ -81,7 +81,7 @@ def _build(c, output_root, base_url):
             def page(name, path, counterpart=True, **context):
                 logical = '/' if path == 'index.html' else '/' + path.removesuffix('index.html')
                 page_path = prefix + logical
-                alternates = {'zh-CN': logical, 'en': '/en' + logical, 'x-default': logical} if counterpart else {lang: page_path}
+                alternates = {'zh-CN': logical, 'en': '/en' + logical, 'x-default': '/en' + logical} if counterpart else {lang: page_path}
                 switch = (logical if lang == 'en' else '/en' + logical) if counterpart else None
                 write_page(release / (prefix.lstrip('/') + '/' + path).lstrip('/'),
                     env.get_template(name).render(**(common | dict(page_path=page_path, alternates=alternates, switch_url=switch) | context)))

@@ -50,6 +50,10 @@ def test_localized_routes_switch_search_and_feed(conn, tmp_path):
     assert 'href="/en/search/"' in en
     assert 'hreflang="zh-CN"' in en
     assert 'https://kiipeak.com/en/' in en
+    assert 'hreflang="x-default" href="https://kiipeak.com/en/"' in en
+    assert '<meta name="kiipeak-page" content="/en/">' in en
+    assert '/assets/language.js?v=' in en
+    assert (site / 'assets/language.js').is_file()
     rows = json.loads((site / 'en/search.json').read_text(encoding='utf-8'))
     assert rows[0]['url'].startswith('/en/articles/')
     assert rows[0]['title'] == english()['title']
